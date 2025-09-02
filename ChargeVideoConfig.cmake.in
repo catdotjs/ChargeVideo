@@ -1,0 +1,6 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/ChargeVideoTargets.cmake")
+message(STATUS "Found ChargeVideo!")
+
+check_required_components(ChargeVideo)
