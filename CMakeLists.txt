@@ -11,6 +11,16 @@ endif()
 
 find_package(Corrade REQUIRED Main)
 find_package(Magnum REQUIRED GL)
+find_package(ChargeAudio QUIET)
+if(NOT ChargeAudio_FOUND)
+  message(
+    "ChargeAudio was not found. Will use the module instead. Beware: You are building ChargeAudio as STATIC library."
+  )
+  add_subdirectory(lib/ChargeAudio)
+else()
+  message("ChargeAudio was found. Will be using it as a SHARED library.")
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(AVFORMAT REQUIRED libavformat)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
