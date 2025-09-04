@@ -1,5 +1,5 @@
-#pragma once
-
+#ifndef CHARGE_VIDEO_BASE_H
+#define CHARGE_VIDEO_BASE_H
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec.h>
@@ -123,3 +123,4 @@ private:
   Image2D loadImage(Containers::Array<char> data);
 };
 } // namespace ChargeVideo
+#endif
