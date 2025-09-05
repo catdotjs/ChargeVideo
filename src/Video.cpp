@@ -1,12 +1,13 @@
 #include "ChargeVideo.hpp"
+#include <Corrade/Utility/Utility.h>
 
 #include <Magnum/GL/TextureFormat.h>
 #include <Magnum/Math/Functions.h>
 #include <Magnum/PixelFormat.h>
 
-#include <cstring>
-
 using namespace ChargeVideo;
+#include <cstring>
+#include <string>
 
 // ================== Video Construct/Destruct ==================
 // ShouldVideoLoop default is true
@@ -131,7 +132,6 @@ void Video::continueVideo() {
       Pause(); // Here we did that (check comment below)
       return;  // We remove what we are returning TO
     }
-    Utility::Debug{} << "Audio" << p << "Video" << z;
     restartVideo();
   }
 
@@ -179,9 +179,6 @@ Containers::Array<char> Video::loadNextFrame() {
         swr_convert(swrCtx, convertedAudioFrame->data,
                     convertedAudioFrame->nb_samples, audioFrame->data,
                     audioFrame->nb_samples);
-
-        p++;
-        Utility::Debug{} << "Loaded an audio frame";
       }
     }
 
@@ -198,14 +195,11 @@ Containers::Array<char> Video::loadNextFrame() {
 
         frameConvert(frame, convertedFrame);
         // FrameDebug(convertedFrame);
-        z++;
-        Utility::Debug{} << "Loaded a video frame";
         break;
       }
     }
     av_packet_unref(packet);
   }
-  Utility::Debug{} << "Finished Load";
   // You cannot use strlen(data) it does not work
   size_t dataSize = av_image_get_buffer_size(
       static_cast<AVPixelFormat>(convertedFrame->format), Dimensions.x(),

@@ -1,5 +1,20 @@
 #ifndef CHARGE_VIDEO_BASE_H
 #define CHARGE_VIDEO_BASE_H
+
+#include <Corrade/Containers/Array.h>
+#include <Magnum/GL/Texture.h>
+#include <Magnum/Image.h>
+#include <Magnum/ImageView.h>
+#include <Magnum/Magnum.h>
+
+#include <cstdint>
+#include <cstdlib>
+#include <functional>
+#include <queue>
+#include <vector>
+
+namespace ChargeVideo {
+namespace _dependencies {
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec.h>
@@ -14,26 +29,12 @@ extern "C" {
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
-
-#include <Corrade/Containers/Array.h>
-
-#include <Magnum/GL/Texture.h>
-#include <Magnum/Image.h>
-#include <Magnum/ImageView.h>
-#include <Magnum/Magnum.h>
-
-#include <cstdint>
-#include <cstdlib>
-#include <functional>
-#include <queue>
-#include <string>
-#include <vector>
+} // namespace _dependencies
 
 using namespace Corrade;
 using namespace Magnum;
 using namespace Math::Literals;
-
-namespace ChargeVideo {
+using namespace _dependencies;
 // ======================== CLASSES ========================
 class Time {
 public:
@@ -101,7 +102,7 @@ private:
 
   // Buffering
   std::queue<Image2D> frameBuffer;
-  uint32_t bufferMaxFrames = 0, p = 0, z = 0;
+  uint32_t bufferMaxFrames = 0;
 
   // SAR / Sizing
   uint32_t scaleFactor = 1;
