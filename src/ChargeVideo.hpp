@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace ChargeVideo {
-namespace _dependencies {
+namespace _ffmpeg {
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec.h>
@@ -29,12 +29,11 @@ extern "C" {
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
-} // namespace _dependencies
+} // namespace _ffmpeg
 
 using namespace Corrade;
 using namespace Magnum;
 using namespace Math::Literals;
-using namespace _dependencies;
 // ======================== CLASSES ========================
 class Time {
 public:
@@ -86,13 +85,13 @@ public:
 
 private:
   // Contextes
-  AVFormatContext *ctx;
-  const AVCodec *vCodec;
-  const AVCodec *aCodec;
-  AVCodecContext *vCodecCtx, *aCodecCtx;
-  AVStream *videoStream, *audioStream;
-  struct SwsContext *swsCtx = NULL; // Visual
-  struct SwrContext *swrCtx = NULL; // Audio
+  _ffmpeg::AVFormatContext *ctx;
+  const _ffmpeg::AVCodec *vCodec;
+  const _ffmpeg::AVCodec *aCodec;
+  _ffmpeg::AVCodecContext *vCodecCtx, *aCodecCtx;
+  _ffmpeg::AVStream *videoStream, *audioStream;
+  struct _ffmpeg::SwsContext *swsCtx = NULL; // Visual
+  struct _ffmpeg::SwrContext *swrCtx = NULL; // Audio
   uint16_t ID = 0;
 
   // Time specific
@@ -111,10 +110,11 @@ private:
   bool frameSet = false;
   void continueVideo();
   Containers::Array<char> loadNextFrame();
-  inline void frameDebug(AVFrame *frame);
-  inline void frameSetScaleSAR(AVFrame *frame);
-  inline void frameConvert(AVFrame *sourceFrame, AVFrame *convertedFrame);
-  inline void frameFlip(AVFrame *frame);
+  inline void frameDebug(_ffmpeg::AVFrame *frame);
+  inline void frameSetScaleSAR(_ffmpeg::AVFrame *frame);
+  inline void frameConvert(_ffmpeg::AVFrame *sourceFrame,
+                           _ffmpeg::AVFrame *convertedFrame);
+  inline void frameFlip(_ffmpeg::AVFrame *frame);
 
   inline void restartVideo();
   void dumpAndRefillBuffer();

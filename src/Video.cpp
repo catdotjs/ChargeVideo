@@ -1,4 +1,5 @@
 #include "ChargeVideo.hpp"
+
 #include <Corrade/Utility/Utility.h>
 
 #include <Magnum/GL/TextureFormat.h>
@@ -6,6 +7,7 @@
 #include <Magnum/PixelFormat.h>
 
 using namespace ChargeVideo;
+using namespace _ffmpeg;
 #include <cstring>
 #include <string>
 
