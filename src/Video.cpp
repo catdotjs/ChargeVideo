@@ -1,10 +1,17 @@
+#include <Corrade/Containers/GrowableArray.h>
+
 #include "ChargeVideo.hpp"
 
+#include <Charge/ChargeAudio.hpp>
+#include <Corrade/Utility/Debug.h>
 #include <Corrade/Utility/Utility.h>
 
 #include <Magnum/GL/TextureFormat.h>
 #include <Magnum/Math/Functions.h>
 #include <Magnum/PixelFormat.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/samplefmt.h>
+#include <libswresample/swresample.h>
 
 using namespace ChargeVideo;
 using namespace _ffmpeg;
@@ -13,9 +20,10 @@ using namespace _ffmpeg;
 
 // ================== Video Construct/Destruct ==================
 // ShouldVideoLoop default is true
-Video::Video(std::string path, bool ShouldVideoLoop, float BufferSizeInSeconds)
+Video::Video(std::string path, ChargeAudio::Engine *engine,
+             bool ShouldVideoLoop, float BufferSizeInSeconds)
     : BufferLenghtInSeconds(BufferSizeInSeconds),
-      isVideoLooping(ShouldVideoLoop) {
+      isVideoLooping(ShouldVideoLoop), audioEngine(engine) {
   // Context to hold our data
   ctx = avformat_alloc_context();
   if (!ctx) {
@@ -63,7 +71,7 @@ Video::Video(std::string path, bool ShouldVideoLoop, float BufferSizeInSeconds)
                 NULL); // open2 is such a stupid name
 
   // Some videos do not have audio streams
-  if (audioStreamNum != -1) {
+  if (audioStreamNum != -1 && audioEngine) {
     aCodec = avcodec_find_decoder(audioStream->codecpar->codec_id);
     aCodecCtx = avcodec_alloc_context3(aCodec);
     avcodec_parameters_to_context(aCodecCtx, audioStream->codecpar);
@@ -72,11 +80,18 @@ Video::Video(std::string path, bool ShouldVideoLoop, float BufferSizeInSeconds)
 
     // Hoo boy I love bunch of different ways to do the same thing!!!!!!
     // Now we have to deal with all of the ways to do that thing!!!!!
-    AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
-    swr_alloc_set_opts2(&swrCtx, &outLayout, AV_SAMPLE_FMT_S16, 44100,
-                        &aCodecCtx->ch_layout, aCodecCtx->sample_fmt,
-                        aCodecCtx->sample_rate, 0, NULL);
+    if (audioEngine->GetChannelCount() == 2) {
+      outLayout = AV_CHANNEL_LAYOUT_STEREO;
+    } else {
+      outLayout = AV_CHANNEL_LAYOUT_MONO;
+    }
+    swr_alloc_set_opts2(&swrCtx, &outLayout, sampleFormat,
+                        audioEngine->GetSampleRate(), &aCodecCtx->ch_layout,
+                        aCodecCtx->sample_fmt, aCodecCtx->sample_rate, 0, NULL);
     swr_init(swrCtx);
+
+    // Creating buffered audio
+    bufferedAudio = audioEngine->CreateSound(10);
   }
 
   // Timing stuff
@@ -155,6 +170,8 @@ void Video::continueVideo() {
   }
 
   loadTexture(frameBuffer.front());
+  if (bufferedAudio->GetState() == ChargeAudio::Sound::SoundState::Idle)
+    bufferedAudio->Play();
   frameBuffer.pop();
 }
 
@@ -167,20 +184,22 @@ Containers::Array<char> Video::loadNextFrame() {
 
   // A hard stop if we are out of frames to read
   while (av_read_frame(ctx, packet) >= 0) {
-    if (static_cast<int8_t>(packet->stream_index) == audioStreamNum) {
+    if (audioEngine &&
+        static_cast<int8_t>(packet->stream_index) == audioStreamNum) {
       avcodec_send_packet(aCodecCtx, packet);
       avcodec_receive_frame(aCodecCtx, audioFrame);
-      if (audioFrame->format != -1) {
-        convertedAudioFrame->format = AV_SAMPLE_FMT_S16;
+      if (audioFrame->format != -1 && audioEngine) {
+        convertedAudioFrame->format = sampleFormat;
+        convertedAudioFrame->sample_rate = audioEngine->GetSampleRate();
+        convertedAudioFrame->ch_layout = outLayout;
         convertedAudioFrame->nb_samples =
             swr_get_out_samples(swrCtx, audioFrame->nb_samples);
-        convertedAudioFrame->ch_layout = AV_CHANNEL_LAYOUT_STEREO;
-        av_frame_get_buffer(convertedAudioFrame,
-                            2); // since it is LRLRLRLRLRLRLR
+        av_frame_get_buffer(convertedAudioFrame, 0);
 
-        swr_convert(swrCtx, convertedAudioFrame->data,
-                    convertedAudioFrame->nb_samples, audioFrame->data,
-                    audioFrame->nb_samples);
+        swr_convert_frame(swrCtx, convertedAudioFrame, audioFrame);
+
+        bufferedAudio->WriteToRingBuffer(convertedAudioFrame->data[0],
+                                         convertedAudioFrame->linesize[0]);
       }
     }
 

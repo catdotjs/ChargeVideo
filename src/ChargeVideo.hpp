@@ -1,17 +1,20 @@
 #ifndef CHARGE_VIDEO_BASE_H
 #define CHARGE_VIDEO_BASE_H
 
-#include <Corrade/Containers/Array.h>
-#include <Magnum/GL/Texture.h>
-#include <Magnum/Image.h>
-#include <Magnum/ImageView.h>
-#include <Magnum/Magnum.h>
-
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
 #include <queue>
 #include <vector>
+
+#include <Corrade/Containers/Array.h>
+#include <Magnum/GL/Texture.h>
+#include <Magnum/Image.h>
+#include <Magnum/ImageView.h>
+#include <Magnum/Magnum.h>
+#include <Magnum/Timeline.h>
+
+#include <Charge/ChargeAudio.hpp>
 
 namespace ChargeVideo {
 namespace _ffmpeg {
@@ -60,8 +63,8 @@ private:
 
 class Video {
 public:
-  Video(std::string path, bool ShouldVideoLoop = true,
-        float BufferSizeInSeconds = 1.0f);
+  Video(std::string path, ChargeAudio::Engine *audioEngine = nullptr,
+        bool ShouldVideoLoop = true, float BufferSizeInSeconds = 1.0f);
   ~Video();
 
   // Manual Control
@@ -98,6 +101,13 @@ private:
   int8_t videoStreamNum = -1, audioStreamNum = -1;
   uint32_t currentFrameNumber = 0;
   float timeSink = 0.0f, frameTime = 0.0f;
+
+  // Audio
+  ChargeAudio::Engine *audioEngine;
+  ChargeAudio::SoundContainer bufferedAudio;
+
+  _ffmpeg::AVChannelLayout outLayout;
+  _ffmpeg::AVSampleFormat sampleFormat = _ffmpeg::AV_SAMPLE_FMT_FLT;
 
   // Buffering
   std::queue<Image2D> frameBuffer;

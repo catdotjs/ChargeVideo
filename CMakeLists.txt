@@ -36,6 +36,7 @@ target_link_libraries(
   PRIVATE Corrade::Main
           Magnum::GL
           Magnum::Magnum
+          ChargeAudio::ChargeAudio
           ${AVFORMAT_LIBRARIES}
           ${AVCODEC_LIBRARIES}
           ${AVUTIL_LIBRARIES}
