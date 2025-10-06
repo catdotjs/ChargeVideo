@@ -122,6 +122,9 @@ void Video::Play() {
     return;
   }
   ID = Time::hookVideo(std::bind(&Video::continueVideo, this));
+  if (audioStreamNum != -1) {
+    bufferedAudio->Play();
+  }
   isVideoPaused = false;
   isVideoOver = false;
 }
@@ -131,6 +134,9 @@ void Video::Pause() {
     return;
   }
   Time::unhookVideo(ID);
+  if (audioStreamNum != -1) {
+    bufferedAudio->Pause();
+  }
   ID = 0;
   isVideoPaused = true;
 }
@@ -140,7 +146,6 @@ void Video::Restart() {
     Play();
   }
   restartVideo();
-  dumpAndRefillBuffer();
 }
 
 void Video::StopLooping() { isVideoLooping = false; }
@@ -181,7 +186,8 @@ void Video::continueVideo() {
                                  loadImage(std::move(frameData.second)));
   }
 
-  if (bufferedAudio->GetState() != ChargeAudio::Sound::SoundState::Playing)
+  if (audioStreamNum != -1 &&
+      bufferedAudio->GetState() != ChargeAudio::Sound::SoundState::Playing)
     bufferedAudio->Play();
 }
 
@@ -351,14 +357,19 @@ void Video::frameSetScaleSAR(AVFrame *frame) {
 void Video::restartVideo() {
   av_seek_frame(ctx, videoStreamNum, 0, AVSEEK_FLAG_BACKWARD);
   avcodec_flush_buffers(vCodecCtx);
-  avcodec_flush_buffers(aCodecCtx);
+  if (audioStreamNum != -1) {
+    avcodec_flush_buffers(aCodecCtx);
+  }
   currentFrameNumber = 0;
+  clock = 0;
   dumpAndRefillBuffer();
 }
 
 void Video::dumpAndRefillBuffer() {
   std::map<double, Image2D>().swap(frameBuffer);
-  bufferedAudio.release();
-  bufferedAudio = audioEngine->CreateSound(10);
+  if (audioStreamNum != -1) {
+    bufferedAudio.release();
+    bufferedAudio = audioEngine->CreateSound(10);
+  }
   loadTexture(loadNextFrame().second);
 }
