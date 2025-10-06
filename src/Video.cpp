@@ -3,15 +3,20 @@
 #include "ChargeVideo.hpp"
 
 #include <Charge/ChargeAudio.hpp>
+#include <Corrade/Containers/Pair.h>
 #include <Corrade/Utility/Debug.h>
 #include <Corrade/Utility/Utility.h>
 
 #include <Magnum/GL/TextureFormat.h>
+#include <Magnum/Image.h>
 #include <Magnum/Math/Functions.h>
 #include <Magnum/PixelFormat.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/rational.h>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
+#include <map>
+#include <utility>
 
 using namespace ChargeVideo;
 using namespace _ffmpeg;
@@ -61,6 +66,7 @@ Video::Video(std::string path, ChargeAudio::Engine *engine,
   }
 
   // Actual stream
+  // Video Codec
   vCodec = avcodec_find_decoder(videoStream->codecpar->codec_id);
   vCodecCtx = avcodec_alloc_context3(vCodec);
   avcodec_parameters_to_context(vCodecCtx, videoStream->codecpar);
@@ -71,6 +77,7 @@ Video::Video(std::string path, ChargeAudio::Engine *engine,
                 NULL); // open2 is such a stupid name
 
   // Some videos do not have audio streams
+  // Audio Codec
   if (audioStreamNum != -1 && audioEngine) {
     aCodec = avcodec_find_decoder(audioStream->codecpar->codec_id);
     aCodecCtx = avcodec_alloc_context3(aCodec);
@@ -94,9 +101,8 @@ Video::Video(std::string path, ChargeAudio::Engine *engine,
     bufferedAudio = audioEngine->CreateSound(10);
   }
 
-  // Timing stuff
-  frameTime = 1 / av_q2d(videoStream->avg_frame_rate);
-  bufferMaxFrames = (1 / frameTime) * BufferLenghtInSeconds;
+  bufferMaxFrames = av_q2d(videoStream->avg_frame_rate) * BufferLenghtInSeconds;
+  timeBase = av_q2d(videoStream->time_base);
 }
 
 Video::~Video() {
@@ -108,7 +114,7 @@ Video::~Video() {
 }
 
 // ================== Public Video Controls ==================
-void Video::AdvanceToNextFrame() { loadTexture(loadNextFrame()); }
+void Video::AdvanceToNextFrame() { loadTexture(loadNextFrame().second); }
 
 void Video::Play() {
   if (ID != 0) {
@@ -143,6 +149,7 @@ void Video::StartLooping() { isVideoLooping = true; }
 // ================== Private Video Controls ==================
 void Video::continueVideo() {
   // Looping handling
+  /* Shelved for now
   if (currentFrameNumber >= videoStream->nb_frames - 2) {
     if (!isVideoLooping) {
       isVideoOver = true;
@@ -150,33 +157,36 @@ void Video::continueVideo() {
       return;  // We remove what we are returning TO
     }
     restartVideo();
-  }
+  }*/
 
   // Timing
-  float variableFrameTime = frameTime - Time::AverageDeltaTime;
-  if (timeSink < variableFrameTime) {
-    timeSink += Time::DeltaTime;
-
-    if (!isVideoOver && frameBuffer.size() < bufferMaxFrames) {
-      frameBuffer.push(loadImage(loadNextFrame()));
-    }
-    return;
-  }
-  // This allows the lag to not accumillate
-  timeSink -= variableFrameTime;
-
-  if (frameBuffer.size() == 0) {
-    frameBuffer.push(loadImage(loadNextFrame()));
+  // Audio Synced
+  if (audioStreamNum != -1) {
+    clock = (double)bufferedAudio->GetPlayedSampleCount() /
+            audioEngine->GetSampleRate();
+  } else {
+    clock += Time::DeltaTime;
   }
 
-  loadTexture(frameBuffer.front());
-  if (bufferedAudio->GetState() == ChargeAudio::Sound::SoundState::Idle)
+  // Load frame
+  auto nextFrame = frameBuffer.begin();
+  if (frameBuffer.size() > 0 && nextFrame->first <= clock) {
+    loadTexture(nextFrame->second);
+    frameBuffer.erase(nextFrame);
+  }
+
+  if (frameBuffer.size() < bufferMaxFrames) {
+    auto frameData = loadNextFrame();
+    frameBuffer.insert_or_assign(frameData.first,
+                                 loadImage(std::move(frameData.second)));
+  }
+
+  if (bufferedAudio->GetState() != ChargeAudio::Sound::SoundState::Playing)
     bufferedAudio->Play();
-  frameBuffer.pop();
 }
 
 // ======================== HELPERS ========================
-Containers::Array<char> Video::loadNextFrame() {
+std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
   AVFrame *frame = av_frame_alloc(), *convertedFrame = av_frame_alloc(),
           *audioFrame = av_frame_alloc(),
           *convertedAudioFrame = av_frame_alloc();
@@ -210,24 +220,23 @@ Containers::Array<char> Video::loadNextFrame() {
       av_packet_unref(packet);
 
       if (frame->format != -1) {
-        // FrameDebug(frame);
         frameSetScaleSAR(frame);
         frameFlip(frame);
-
         frameConvert(frame, convertedFrame);
-        // FrameDebug(convertedFrame);
         break;
       }
     }
     av_packet_unref(packet);
   }
-  // You cannot use strlen(data) it does not work
+
   size_t dataSize = av_image_get_buffer_size(
       static_cast<AVPixelFormat>(convertedFrame->format), Dimensions.x(),
       Dimensions.y(), 3);
   Containers::Array<char> data = Containers::Array<char>{NoInit, dataSize};
   std::memcpy(data.data(), convertedFrame->data[0], dataSize);
   currentFrameNumber++;
+
+  double ptsInSeconds = timeBase * frame->pts;
 
   // Cleanup time cus this is a C library yay (ironic)
   av_frame_free(
@@ -237,7 +246,7 @@ Containers::Array<char> Video::loadNextFrame() {
   av_frame_free(&audioFrame);
   av_packet_free(&packet);
 
-  return data;
+  return {ptsInSeconds, std::move(data)};
 }
 
 Image2D Video::loadImage(Containers::Array<char> data) {
@@ -347,6 +356,6 @@ void Video::restartVideo() {
 }
 
 void Video::dumpAndRefillBuffer() {
-  std::queue<Image2D>().swap(frameBuffer);
-  loadTexture(loadNextFrame());
+  std::map<double, Image2D>().swap(frameBuffer);
+  loadTexture(loadNextFrame().second);
 }

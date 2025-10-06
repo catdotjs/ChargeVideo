@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
-#include <queue>
+#include <map>
 #include <vector>
 
 #include <Corrade/Containers/Array.h>
@@ -42,23 +42,17 @@ class Time {
 public:
   static void AdvanceTime();
   static float DeltaTime;
-  static float AverageDeltaTime;
-  static uint16_t ADTMaxSample;
 
 private:
   static Timeline time;
-  static float rollingSum;
-  static uint16_t ADTIndex, videoIDCounter;
-  static bool ADTFirstCycle;
+  static uint16_t videoIDCounter;
   static std::unordered_map<uint16_t, std::function<void()>> videoPlayMethods;
-  static std::vector<float> deltaAverage;
   static std::vector<uint16_t> toUnhook;
 
   // Specific for internal controls
   static uint16_t hookVideo(std::function<void()> videoPlay);
   static void unhookVideo(uint16_t ID);
-  friend class Video; // friend allows other classes to use private methods of a
-                      // class without having to make it public for all
+  friend class Video;
 };
 
 class Video {
@@ -100,17 +94,18 @@ private:
   // Time specific
   int8_t videoStreamNum = -1, audioStreamNum = -1;
   uint32_t currentFrameNumber = 0;
-  float timeSink = 0.0f, frameTime = 0.0f;
+  double timeBase = 0, clock = 0;
 
   // Audio
   ChargeAudio::Engine *audioEngine;
   ChargeAudio::SoundContainer bufferedAudio;
 
+  // Channel data
   _ffmpeg::AVChannelLayout outLayout;
   _ffmpeg::AVSampleFormat sampleFormat = _ffmpeg::AV_SAMPLE_FMT_FLT;
 
   // Buffering
-  std::queue<Image2D> frameBuffer;
+  std::map<double, Image2D> frameBuffer;
   uint32_t bufferMaxFrames = 0;
 
   // SAR / Sizing
@@ -118,8 +113,10 @@ private:
 
   // Frame handling
   bool frameSet = false;
+
+  // Methods
   void continueVideo();
-  Containers::Array<char> loadNextFrame();
+  std::pair<double, Containers::Array<char>> loadNextFrame();
   inline void frameDebug(_ffmpeg::AVFrame *frame);
   inline void frameSetScaleSAR(_ffmpeg::AVFrame *frame);
   inline void frameConvert(_ffmpeg::AVFrame *sourceFrame,
