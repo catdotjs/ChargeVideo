@@ -245,8 +245,7 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
   double ptsInSeconds = timeBase * frame->pts;
 
   // Cleanup time cus this is a C library yay (ironic)
-  av_frame_free(
-      &convertedFrame); // Data[0] from here needs to be owned by someone else
+  av_frame_free(&convertedFrame);
   av_frame_free(&convertedAudioFrame);
   av_frame_free(&frame);
   av_frame_free(&audioFrame);
