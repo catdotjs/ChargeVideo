@@ -99,7 +99,7 @@ Video::Video(std::string path, ChargeAudio::Engine *engine,
     swr_init(swrCtx);
 
     // Creating buffered audio
-    bufferedAudio = audioEngine->CreateSound(10);
+    Sound = audioEngine->CreateSound(10);
   }
 
   bufferMaxFrames = av_q2d(videoStream->avg_frame_rate) * BufferLenghtInSeconds;
@@ -123,7 +123,7 @@ void Video::Play() {
   }
   ID = Time::hookVideo(std::bind(&Video::continueVideo, this));
   if (audioStreamNum != -1) {
-    bufferedAudio->Play();
+    Sound->Play();
   }
   isVideoPaused = false;
   isVideoOver = false;
@@ -135,7 +135,7 @@ void Video::Pause() {
   }
   Time::unhookVideo(ID);
   if (audioStreamNum != -1) {
-    bufferedAudio->Pause();
+    Sound->Pause();
   }
   ID = 0;
   isVideoPaused = true;
@@ -167,8 +167,8 @@ void Video::continueVideo() {
   // Timing
   // Audio Synced
   if (audioStreamNum != -1) {
-    clock = (double)bufferedAudio->GetPlayedSampleCount() /
-            audioEngine->GetSampleRate();
+    clock =
+        (double)Sound->GetPlayedSampleCount() / audioEngine->GetSampleRate();
   } else {
     clock += Time::DeltaTime;
   }
@@ -187,8 +187,8 @@ void Video::continueVideo() {
   }
 
   if (audioStreamNum != -1 &&
-      bufferedAudio->GetState() != ChargeAudio::Sound::SoundState::Playing)
-    bufferedAudio->Play();
+      Sound->GetState() != ChargeAudio::Sound::SoundState::Playing)
+    Sound->Play();
 }
 
 // ======================== HELPERS ========================
@@ -214,8 +214,8 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
 
         swr_convert_frame(swrCtx, convertedAudioFrame, audioFrame);
 
-        bufferedAudio->WriteToRingBuffer(convertedAudioFrame->data[0],
-                                         convertedAudioFrame->linesize[0]);
+        Sound->WriteToRingBuffer(convertedAudioFrame->data[0],
+                                 convertedAudioFrame->linesize[0]);
       }
     }
 
@@ -367,8 +367,8 @@ void Video::restartVideo() {
 void Video::dumpAndRefillBuffer() {
   std::map<double, Image2D>().swap(frameBuffer);
   if (audioStreamNum != -1) {
-    bufferedAudio.release();
-    bufferedAudio = audioEngine->CreateSound(10);
+    Sound.release();
+    Sound = audioEngine->CreateSound(10);
   }
   loadTexture(loadNextFrame().second);
 }

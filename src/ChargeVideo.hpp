@@ -80,6 +80,9 @@ public:
   // SAR and Scaling
   Vector2i Dimensions{0, 0};
 
+  // Audio
+  ChargeAudio::SoundContainer Sound;
+
 private:
   // Contextes
   _ffmpeg::AVFormatContext *ctx;
@@ -98,7 +101,6 @@ private:
 
   // Audio
   ChargeAudio::Engine *audioEngine;
-  ChargeAudio::SoundContainer bufferedAudio;
 
   // Audio Channel data
   _ffmpeg::AVChannelLayout outLayout;
