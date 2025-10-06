@@ -17,8 +17,6 @@ void Time::AdvanceTime() {
   if (time.currentFrameTime() == 0.0f) {
     time.start();
   }
-
-  // We are giving average delta for frame timing stablisation
   DeltaTime = time.currentFrameDuration();
 
   for (auto processVideo : videoPlayMethods) {

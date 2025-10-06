@@ -89,10 +89,10 @@ private:
   _ffmpeg::AVStream *videoStream, *audioStream;
   struct _ffmpeg::SwsContext *swsCtx = NULL; // Visual
   struct _ffmpeg::SwrContext *swrCtx = NULL; // Audio
+  int8_t videoStreamNum = -1, audioStreamNum = -1;
   uint16_t ID = 0;
 
   // Time specific
-  int8_t videoStreamNum = -1, audioStreamNum = -1;
   uint32_t currentFrameNumber = 0;
   double timeBase = 0, clock = 0;
 
@@ -100,11 +100,11 @@ private:
   ChargeAudio::Engine *audioEngine;
   ChargeAudio::SoundContainer bufferedAudio;
 
-  // Channel data
+  // Audio Channel data
   _ffmpeg::AVChannelLayout outLayout;
   _ffmpeg::AVSampleFormat sampleFormat = _ffmpeg::AV_SAMPLE_FMT_FLT;
 
-  // Buffering
+  // Image Buffering
   std::map<double, Image2D> frameBuffer;
   uint32_t bufferMaxFrames = 0;
 

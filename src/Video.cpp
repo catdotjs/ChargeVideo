@@ -92,6 +92,7 @@ Video::Video(std::string path, ChargeAudio::Engine *engine,
     } else {
       outLayout = AV_CHANNEL_LAYOUT_MONO;
     }
+
     swr_alloc_set_opts2(&swrCtx, &outLayout, sampleFormat,
                         audioEngine->GetSampleRate(), &aCodecCtx->ch_layout,
                         aCodecCtx->sample_fmt, aCodecCtx->sample_rate, 0, NULL);
@@ -149,7 +150,6 @@ void Video::StartLooping() { isVideoLooping = true; }
 // ================== Private Video Controls ==================
 void Video::continueVideo() {
   // Looping handling
-  /* Shelved for now
   if (currentFrameNumber >= videoStream->nb_frames - 2) {
     if (!isVideoLooping) {
       isVideoOver = true;
@@ -157,7 +157,7 @@ void Video::continueVideo() {
       return;  // We remove what we are returning TO
     }
     restartVideo();
-  }*/
+  }
 
   // Timing
   // Audio Synced
@@ -353,9 +353,12 @@ void Video::restartVideo() {
   avcodec_flush_buffers(vCodecCtx);
   avcodec_flush_buffers(aCodecCtx);
   currentFrameNumber = 0;
+  dumpAndRefillBuffer();
 }
 
 void Video::dumpAndRefillBuffer() {
   std::map<double, Image2D>().swap(frameBuffer);
+  bufferedAudio.release();
+  bufferedAudio = audioEngine->CreateSound(10);
   loadTexture(loadNextFrame().second);
 }
