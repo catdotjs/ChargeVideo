@@ -4,16 +4,16 @@
 
 using namespace ChargeVideo;
 
-// ================== Video Timing ==================
-float Time::DeltaTime = 0.0f;
-uint16_t Time::videoIDCounter = 0;
+// ================== Video Managing ==================
+float Manager::DeltaTime = 0.0f;
+uint16_t Manager::videoIDCounter = 0;
 
-std::unordered_map<uint16_t, std::function<void()>> Time::videoPlayMethods;
-std::vector<uint16_t> Time::toUnhook;
+std::unordered_map<uint16_t, std::function<void()>> Manager::videoPlayMethods;
+std::vector<uint16_t> Manager::toUnhook;
 
-Timeline Time::time{};
+Timeline Manager::time{};
 
-void Time::AdvanceTime() {
+void Manager::AdvanceTime() {
   if (time.currentFrameTime() == 0.0f) {
     time.start();
   }
@@ -30,9 +30,9 @@ void Time::AdvanceTime() {
   time.nextFrame();
 }
 
-uint16_t Time::hookVideo(std::function<void()> videoPlay) {
+uint16_t Manager::hookVideo(std::function<void()> videoPlay) {
   videoPlayMethods.insert({++videoIDCounter, videoPlay});
   return videoIDCounter;
 }
 
-void Time::unhookVideo(uint16_t ID) { toUnhook.push_back(ID); }
+void Manager::unhookVideo(uint16_t ID) { toUnhook.push_back(ID); }

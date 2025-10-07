@@ -38,7 +38,7 @@ using namespace Corrade;
 using namespace Magnum;
 using namespace Math::Literals;
 // ======================== CLASSES ========================
-class Time {
+class Manager {
 public:
   static void AdvanceTime();
   static float DeltaTime;

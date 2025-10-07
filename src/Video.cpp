@@ -121,7 +121,7 @@ void Video::Play() {
   if (ID != 0) {
     return;
   }
-  ID = Time::hookVideo(std::bind(&Video::continueVideo, this));
+  ID = Manager::hookVideo(std::bind(&Video::continueVideo, this));
   if (audioStreamNum != -1) {
     Sound->Play();
   }
@@ -133,7 +133,7 @@ void Video::Pause() {
   if (ID == 0) {
     return;
   }
-  Time::unhookVideo(ID);
+  Manager::unhookVideo(ID);
   if (audioStreamNum != -1) {
     Sound->Pause();
   }
@@ -170,7 +170,7 @@ void Video::continueVideo() {
     clock =
         (double)Sound->GetPlayedSampleCount() / audioEngine->GetSampleRate();
   } else {
-    clock += Time::DeltaTime;
+    clock += Manager::DeltaTime;
   }
 
   // Load frame
