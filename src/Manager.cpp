@@ -13,7 +13,7 @@ std::vector<uint16_t> Manager::toUnhook;
 
 Timeline Manager::time{};
 
-void Manager::AdvanceTime() {
+void Manager::Advance() {
   if (time.currentFrameTime() == 0.0f) {
     time.start();
   }

@@ -40,7 +40,7 @@ using namespace Math::Literals;
 // ======================== CLASSES ========================
 class Manager {
 public:
-  static void AdvanceTime();
+  static void Advance();
   static float DeltaTime;
 
 private:
