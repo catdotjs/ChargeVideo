@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <functional>
 #include <map>
+#include <type_traits>
 #include <vector>
 
 #include <Corrade/Containers/Array.h>
@@ -57,8 +58,12 @@ private:
 
 class Video {
 public:
+  // Enums & Flags
+  enum class State { Playing, Finished, Paused, Idle };
+  enum class Flags : uint32_t { None = 0, Looping = 1 << 0 };
+
   Video(std::string path, ChargeAudio::Engine *audioEngine = nullptr,
-        bool ShouldVideoLoop = true, float BufferSizeInSeconds = 1.0f);
+        Flags videoFlags = Flags::None, float bufferSizeInSeconds = 1.0f);
   ~Video();
 
   // Manual Control
@@ -67,18 +72,18 @@ public:
   // Automatic play
   void Play();
   void Pause();
-  void StopLooping();
-  void StartLooping();
+  void SwitchLooping();
   void Restart();
+
+  // Info
+  const double GetDuration();
+  const double GetPlaybackTime();
+  const Vector2i GetDimensions();
+  State GetState();
+  Flags GetFlags();
 
   // Frame and buffer
   GL::Texture2D CurrentFrame;
-
-  float BufferLenghtInSeconds = 1;
-  bool isVideoLooping = true, isVideoOver = false, isVideoPaused = false;
-
-  // SAR and Scaling
-  Vector2i Dimensions{0, 0};
 
   // Audio
   ChargeAudio::SoundContainer Sound;
@@ -92,7 +97,11 @@ private:
   _ffmpeg::AVStream *videoStream, *audioStream;
   struct _ffmpeg::SwsContext *swsCtx = NULL; // Visual
   struct _ffmpeg::SwrContext *swrCtx = NULL; // Audio
+
+  // State
   int8_t videoStreamNum = -1, audioStreamNum = -1;
+  State videoState;
+  Flags videoFlags;
   uint16_t ID = 0;
 
   // Time specific
@@ -112,9 +121,11 @@ private:
 
   // SAR / Sizing
   uint32_t scaleFactor = 1;
+  Vector2i Dimensions{0, 0};
 
   // Frame handling
   bool frameSet = false;
+  float bufferLenghtInSeconds;
 
   // Methods
   void continueVideo();
@@ -132,5 +143,23 @@ private:
   void loadTexture(ImageView2D image);
   Image2D loadImage(Containers::Array<char> data);
 };
+
+inline Video::Flags operator|(Video::Flags x, Video::Flags y) {
+  return static_cast<Video::Flags>(
+      static_cast<std::underlying_type_t<Video::Flags>>(x) |
+      static_cast<std::underlying_type_t<Video::Flags>>(y));
+}
+
+inline Video::Flags operator&(Video::Flags x, Video::Flags y) {
+  return static_cast<Video::Flags>(
+      static_cast<std::underlying_type_t<Video::Flags>>(x) &
+      static_cast<std::underlying_type_t<Video::Flags>>(y));
+}
+
+inline Video::Flags operator^(Video::Flags x, Video::Flags y) {
+  return static_cast<Video::Flags>(
+      static_cast<std::underlying_type_t<Video::Flags>>(x) ^
+      static_cast<std::underlying_type_t<Video::Flags>>(y));
+}
 } // namespace ChargeVideo
 #endif

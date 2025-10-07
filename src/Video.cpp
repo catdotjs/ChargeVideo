@@ -24,11 +24,13 @@ using namespace _ffmpeg;
 #include <string>
 
 // ================== Video Construct/Destruct ==================
-// ShouldVideoLoop default is true
-Video::Video(std::string path, ChargeAudio::Engine *engine,
-             bool ShouldVideoLoop, float BufferSizeInSeconds)
-    : BufferLenghtInSeconds(BufferSizeInSeconds),
-      isVideoLooping(ShouldVideoLoop), audioEngine(engine) {
+Video::Video(std::string path, ChargeAudio::Engine *engine, Flags videoF,
+             float bufferS)
+    : audioEngine(engine) {
+  // Have to do it here since ordering of init in the header class
+  bufferLenghtInSeconds = bufferS;
+  videoFlags = videoF;
+
   // Context to hold our data
   ctx = avformat_alloc_context();
   if (!ctx) {
@@ -102,7 +104,7 @@ Video::Video(std::string path, ChargeAudio::Engine *engine,
     Sound = audioEngine->CreateSound(10);
   }
 
-  bufferMaxFrames = av_q2d(videoStream->avg_frame_rate) * BufferLenghtInSeconds;
+  bufferMaxFrames = av_q2d(videoStream->avg_frame_rate) * bufferLenghtInSeconds;
   timeBase = av_q2d(videoStream->time_base);
 }
 
@@ -125,8 +127,7 @@ void Video::Play() {
   if (audioStreamNum != -1) {
     Sound->Play();
   }
-  isVideoPaused = false;
-  isVideoOver = false;
+  videoState = State::Playing;
 }
 
 void Video::Pause() {
@@ -138,7 +139,7 @@ void Video::Pause() {
     Sound->Pause();
   }
   ID = 0;
-  isVideoPaused = true;
+  videoState = State::Paused;
 }
 
 void Video::Restart() {
@@ -148,18 +149,24 @@ void Video::Restart() {
   restartVideo();
 }
 
-void Video::StopLooping() { isVideoLooping = false; }
-
-void Video::StartLooping() { isVideoLooping = true; }
+const double Video::GetDuration() { return timeBase * videoStream->duration; }
+const double Video::GetPlaybackTime() { return clock; }
+const Vector2i Video::GetDimensions() { return Dimensions; }
+Video::State Video::GetState() { return videoState; }
+Video::Flags Video::GetFlags() { return videoFlags; }
+void Video::SwitchLooping() { videoFlags = videoFlags ^ Flags::Looping; }
 
 // ================== Private Video Controls ==================
 void Video::continueVideo() {
+  bool finishedDecoding = currentFrameNumber >= videoStream->nb_frames - 2,
+       bufferEmpty = frameBuffer.empty(),
+       isNotLooping = (videoFlags & Flags::Looping) != Flags::Looping;
   // Looping handling
-  if (currentFrameNumber >= videoStream->nb_frames - 2) {
-    if (!isVideoLooping) {
-      isVideoOver = true;
-      Pause(); // Here we did that (check comment below)
-      return;  // We remove what we are returning TO
+  if (finishedDecoding && bufferEmpty) {
+    if (isNotLooping) {
+      Pause();
+      videoState = State::Finished;
+      return;
     }
     restartVideo();
   }
@@ -175,19 +182,19 @@ void Video::continueVideo() {
 
   // Load frame
   auto nextFrame = frameBuffer.begin();
-  if (frameBuffer.size() > 0 && nextFrame->first <= clock) {
+  if (!bufferEmpty && nextFrame->first <= clock) {
     loadTexture(nextFrame->second);
     frameBuffer.erase(nextFrame);
   }
 
-  if (frameBuffer.size() < bufferMaxFrames) {
+  if (!finishedDecoding && frameBuffer.size() < bufferMaxFrames) {
     auto frameData = loadNextFrame();
     frameBuffer.insert_or_assign(frameData.first,
                                  loadImage(std::move(frameData.second)));
   }
 
   if (audioStreamNum != -1 &&
-      Sound->GetState() != ChargeAudio::Sound::SoundState::Playing)
+      Sound->GetState() != ChargeAudio::Sound::State::Playing)
     Sound->Play();
 }
 
