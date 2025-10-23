@@ -104,6 +104,13 @@ private:
   Flags videoFlags;
   uint16_t ID = 0;
 
+  // Frames
+  _ffmpeg::AVFrame *frame = _ffmpeg::av_frame_alloc(),
+                   *convertedFrame = _ffmpeg::av_frame_alloc(),
+                   *audioFrame = _ffmpeg::av_frame_alloc(),
+                   *convertedAudioFrame = _ffmpeg::av_frame_alloc();
+  _ffmpeg::AVPacket *packet = _ffmpeg::av_packet_alloc();
+
   // Time specific
   uint32_t currentFrameNumber = 0;
   double timeBase = 0, clock = 0;
@@ -132,8 +139,7 @@ private:
   std::pair<double, Containers::Array<char>> loadNextFrame();
   inline void frameDebug(_ffmpeg::AVFrame *frame);
   inline void frameSetScaleSAR(_ffmpeg::AVFrame *frame);
-  inline void frameConvert(_ffmpeg::AVFrame *sourceFrame,
-                           _ffmpeg::AVFrame *convertedFrame);
+  inline void frameConvert();
   inline void frameFlip(_ffmpeg::AVFrame *frame);
 
   inline void restartVideo();
@@ -142,6 +148,8 @@ private:
   void loadTexture(Containers::Array<char> data);
   void loadTexture(ImageView2D image);
   Image2D loadImage(Containers::Array<char> data);
+
+  void reinitSound();
 };
 
 inline Video::Flags operator|(Video::Flags x, Video::Flags y) {

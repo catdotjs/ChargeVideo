@@ -11,10 +11,16 @@
 #include <Magnum/Image.h>
 #include <Magnum/Math/Functions.h>
 #include <Magnum/PixelFormat.h>
+#include <libavcodec/avcodec.h>
+#include <libavcodec/packet.h>
+#include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/frame.h>
+#include <libavutil/pixfmt.h>
 #include <libavutil/rational.h>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 #include <map>
 #include <utility>
 
@@ -40,6 +46,7 @@ Video::Video(std::string path, ChargeAudio::Engine *engine, Flags videoF,
 
   if (avformat_open_input(&ctx, path.c_str(), NULL, NULL) != 0) {
     Utility::Error{} << "Could not open file " << path.c_str();
+    avformat_close_input(&ctx);
     avformat_free_context(ctx);
     return;
   }
@@ -95,13 +102,15 @@ Video::Video(std::string path, ChargeAudio::Engine *engine, Flags videoF,
       outLayout = AV_CHANNEL_LAYOUT_MONO;
     }
 
+    // Resampling
     swr_alloc_set_opts2(&swrCtx, &outLayout, sampleFormat,
                         audioEngine->GetSampleRate(), &aCodecCtx->ch_layout,
                         aCodecCtx->sample_fmt, aCodecCtx->sample_rate, 0, NULL);
     swr_init(swrCtx);
 
-    // Creating buffered audio
     Sound = audioEngine->CreateSound(10);
+
+    // Frame init
   }
 
   bufferMaxFrames = av_q2d(videoStream->avg_frame_rate) * bufferLenghtInSeconds;
@@ -110,7 +119,16 @@ Video::Video(std::string path, ChargeAudio::Engine *engine, Flags videoF,
 
 Video::~Video() {
   sws_freeContext(swsCtx);
-  swr_free(&swrCtx);
+  if (audioStreamNum != -1) {
+    swr_free(&swrCtx);
+    av_frame_free(&audioFrame);
+    av_frame_free(&convertedAudioFrame);
+  }
+  av_frame_free(&frame);
+  av_frame_free(&convertedFrame);
+  av_packet_free(&packet);
+
+  avformat_close_input(&ctx);
   avformat_free_context(ctx);
   avcodec_free_context(&vCodecCtx);
   avcodec_free_context(&aCodecCtx);
@@ -124,6 +142,7 @@ void Video::Play() {
     return;
   }
   ID = Manager::hookVideo(std::bind(&Video::continueVideo, this));
+  reinitSound();
   if (audioStreamNum != -1) {
     Sound->Play();
   }
@@ -135,9 +154,7 @@ void Video::Pause() {
     return;
   }
   Manager::unhookVideo(ID);
-  if (audioStreamNum != -1) {
-    Sound->Pause();
-  }
+  reinitSound();
   ID = 0;
   videoState = State::Paused;
 }
@@ -200,10 +217,10 @@ void Video::continueVideo() {
 
 // ======================== HELPERS ========================
 std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
-  AVFrame *frame = av_frame_alloc(), *convertedFrame = av_frame_alloc(),
-          *audioFrame = av_frame_alloc(),
-          *convertedAudioFrame = av_frame_alloc();
-  AVPacket *packet = av_packet_alloc();
+  av_frame_unref(convertedFrame);
+  av_frame_unref(convertedAudioFrame);
+  av_frame_unref(frame);
+  av_frame_unref(audioFrame);
 
   // A hard stop if we are out of frames to read
   while (av_read_frame(ctx, packet) >= 0) {
@@ -211,13 +228,14 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
         static_cast<int8_t>(packet->stream_index) == audioStreamNum) {
       avcodec_send_packet(aCodecCtx, packet);
       avcodec_receive_frame(aCodecCtx, audioFrame);
+
       if (audioFrame->format != -1 && audioEngine) {
         convertedAudioFrame->format = sampleFormat;
         convertedAudioFrame->sample_rate = audioEngine->GetSampleRate();
         convertedAudioFrame->ch_layout = outLayout;
         convertedAudioFrame->nb_samples =
             swr_get_out_samples(swrCtx, audioFrame->nb_samples);
-        av_frame_get_buffer(convertedAudioFrame, 0);
+        av_frame_get_buffer(convertedAudioFrame, 2);
 
         swr_convert_frame(swrCtx, convertedAudioFrame, audioFrame);
 
@@ -227,18 +245,19 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
     }
 
     if (static_cast<int8_t>(packet->stream_index) == videoStreamNum) {
-      // Requests a frame from the decoder
       avcodec_send_packet(vCodecCtx, packet);
       avcodec_receive_frame(vCodecCtx, frame);
       av_packet_unref(packet);
 
-      if (frame->format != -1) {
+      if (frame->format != AV_PIX_FMT_NONE) {
         frameSetScaleSAR(frame);
         frameFlip(frame);
-        frameConvert(frame, convertedFrame);
+        frameConvert();
         break;
       }
     }
+
+    // You don't know what you are doing, do not touch this
     av_packet_unref(packet);
   }
 
@@ -252,11 +271,6 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
   double ptsInSeconds = timeBase * frame->pts;
 
   // Cleanup time cus this is a C library yay (ironic)
-  av_frame_free(&convertedFrame);
-  av_frame_free(&convertedAudioFrame);
-  av_frame_free(&frame);
-  av_frame_free(&audioFrame);
-  av_packet_free(&packet);
 
   return {ptsInSeconds, std::move(data)};
 }
@@ -313,7 +327,7 @@ void Video::frameFlip(AVFrame *frame) {
   frame->linesize[2] = -frame->linesize[2];
 }
 
-void Video::frameConvert(AVFrame *sourceFrame, AVFrame *convertedFrame) {
+void Video::frameConvert() {
   // Converting YUV420p to RGB24
   convertedFrame->format = AV_PIX_FMT_RGB24;
   convertedFrame->colorspace = AVCOL_SPC_BT709;
@@ -324,20 +338,16 @@ void Video::frameConvert(AVFrame *sourceFrame, AVFrame *convertedFrame) {
                       3); // Proper way to allocate space for data
 
   if (swsCtx == NULL) {
-    swsCtx = sws_getContext(Dimensions.x(), Dimensions.y(),
-                            static_cast<AVPixelFormat>(sourceFrame->format),
-                            Dimensions.x(), Dimensions.y(),
-                            static_cast<AVPixelFormat>(convertedFrame->format),
-                            SWS_BICUBIC, NULL, NULL, NULL);
+    swsCtx = sws_getContext(Dimensions.x(), Dimensions.y(), vCodecCtx->pix_fmt,
+                            Dimensions.x(), Dimensions.y(), AV_PIX_FMT_RGB24,
+                            SWS_BILINEAR, NULL, NULL, NULL);
   }
-  // TO DO: DO THIS PROPERLY
-  sws_setColorspaceDetails(swsCtx, sws_getCoefficients(SWS_CS_ITU709),
-                           sourceFrame->color_range,
-                           sws_getCoefficients(SWS_CS_ITU709),
+  sws_setColorspaceDetails(swsCtx, sws_getCoefficients(vCodecCtx->colorspace),
+                           frame->color_range,
+                           sws_getCoefficients(convertedFrame->colorspace),
                            convertedFrame->color_range, 0, 1 << 16, 1 << 16);
-  // -----------------------------
 
-  sws_scale(swsCtx, sourceFrame->data, sourceFrame->linesize, 0, Dimensions.y(),
+  sws_scale(swsCtx, frame->data, frame->linesize, 0, Dimensions.y(),
             convertedFrame->data, convertedFrame->linesize);
 }
 
@@ -373,9 +383,13 @@ void Video::restartVideo() {
 
 void Video::dumpAndRefillBuffer() {
   std::map<double, Image2D>().swap(frameBuffer);
-  if (audioStreamNum != -1) {
-    Sound.release();
-    Sound = audioEngine->CreateSound(10);
-  }
+  reinitSound();
   loadTexture(loadNextFrame().second);
+}
+
+void Video::reinitSound() {
+  if (audioStreamNum != -1) {
+    delete Sound.release();
+    Sound = std::move(audioEngine->CreateSound(10));
+  }
 }
