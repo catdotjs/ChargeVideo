@@ -218,9 +218,7 @@ void Video::continueVideo() {
 // ======================== HELPERS ========================
 std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
   av_frame_unref(convertedFrame);
-  av_frame_unref(convertedAudioFrame);
   av_frame_unref(frame);
-  av_frame_unref(audioFrame);
 
   // A hard stop if we are out of frames to read
   while (av_read_frame(ctx, packet) >= 0) {
@@ -230,6 +228,10 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
       avcodec_receive_frame(aCodecCtx, audioFrame);
 
       if (audioFrame->format != -1 && audioEngine) {
+        // Putting a pin on here, shouldn't we be able to rewrite on top of the
+        // same buffer?
+        //
+        // At least with image frames the size is always constant
         convertedAudioFrame->format = sampleFormat;
         convertedAudioFrame->sample_rate = audioEngine->GetSampleRate();
         convertedAudioFrame->ch_layout = outLayout;
@@ -241,6 +243,10 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
 
         Sound->WriteToRingBuffer(convertedAudioFrame->data[0],
                                  convertedAudioFrame->linesize[0]);
+
+        // Just due to a small memory leak this needs to be here
+        av_frame_unref(convertedAudioFrame);
+        av_frame_unref(audioFrame);
       }
     }
 
@@ -261,6 +267,9 @@ std::pair<double, Containers::Array<char>> Video::loadNextFrame() {
     av_packet_unref(packet);
   }
 
+  // Definetly need to calculate this once and then make a list of
+  // preallocated frames in the framebuffer that we can constantly
+  // cycle
   size_t dataSize = av_image_get_buffer_size(
       static_cast<AVPixelFormat>(convertedFrame->format), Dimensions.x(),
       Dimensions.y(), 3);
@@ -389,7 +398,15 @@ void Video::dumpAndRefillBuffer() {
 
 void Video::reinitSound() {
   if (audioStreamNum != -1) {
-    delete Sound.release();
+    // TO DO: we need a way to easily pass sound configs between two instances
+    auto oldSound = Sound.release();
+    oldSound->Pause();
     Sound = std::move(audioEngine->CreateSound(10));
+
+    // This is very much temparory
+    Sound->SetVolume(oldSound->GetVolume());
+    Sound->SetPosition(oldSound->GetPosition());
+
+    delete oldSound;
   }
 }
