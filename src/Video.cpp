@@ -1,16 +1,4 @@
-#include <Corrade/Containers/GrowableArray.h>
-
 #include "ChargeVideo.hpp"
-
-#include <Charge/ChargeAudio.hpp>
-#include <Corrade/Containers/Pair.h>
-#include <Corrade/Utility/Debug.h>
-#include <Corrade/Utility/Utility.h>
-
-#include <Magnum/GL/TextureFormat.h>
-#include <Magnum/Image.h>
-#include <Magnum/Math/Functions.h>
-#include <Magnum/PixelFormat.h>
 #include <utility>
 
 using namespace ChargeVideo;
