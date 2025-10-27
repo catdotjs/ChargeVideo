@@ -16,6 +16,45 @@
 using namespace ChargeVideo;
 using namespace _ffmpeg;
 
+// ================== Public Video Controls ==================
+void Video::AdvanceToNextFrame() { loadTexture(loadNextFrame().second); }
+
+void Video::Play() {
+  if (ID != 0) {
+    return;
+  }
+  ID = Manager::hookVideo(std::bind(&Video::continueVideo, this));
+  reinitSound();
+  if (audioStreamNum != -1) {
+    Sound->Play();
+  }
+  videoState = State::Playing;
+}
+
+void Video::Pause() {
+  if (ID == 0) {
+    return;
+  }
+  Manager::unhookVideo(ID);
+  reinitSound();
+  ID = 0;
+  videoState = State::Paused;
+}
+
+void Video::Restart() {
+  if (ID == 0) {
+    Play();
+  }
+  restartVideo();
+}
+
+const double Video::GetDuration() { return timeBase * videoStream->duration; }
+const double Video::GetPlaybackTime() { return clock; }
+const Vector2i Video::GetDimensions() { return Dimensions; }
+Video::State Video::GetState() { return videoState; }
+Video::Flags Video::GetFlags() { return videoFlags; }
+void Video::SwitchLooping() { videoFlags = videoFlags ^ Flags::Looping; }
+
 // ================== Video Construct/Destruct ==================
 Video::Video(std::string path, ChargeAudio::Engine *engine, Flags videoF,
              float bufferS)
@@ -118,42 +157,3 @@ Video::~Video() {
   avcodec_free_context(&vCodecCtx);
   avcodec_free_context(&aCodecCtx);
 }
-
-// ================== Public Video Controls ==================
-void Video::AdvanceToNextFrame() { loadTexture(loadNextFrame().second); }
-
-void Video::Play() {
-  if (ID != 0) {
-    return;
-  }
-  ID = Manager::hookVideo(std::bind(&Video::continueVideo, this));
-  reinitSound();
-  if (audioStreamNum != -1) {
-    Sound->Play();
-  }
-  videoState = State::Playing;
-}
-
-void Video::Pause() {
-  if (ID == 0) {
-    return;
-  }
-  Manager::unhookVideo(ID);
-  reinitSound();
-  ID = 0;
-  videoState = State::Paused;
-}
-
-void Video::Restart() {
-  if (ID == 0) {
-    Play();
-  }
-  restartVideo();
-}
-
-const double Video::GetDuration() { return timeBase * videoStream->duration; }
-const double Video::GetPlaybackTime() { return clock; }
-const Vector2i Video::GetDimensions() { return Dimensions; }
-Video::State Video::GetState() { return videoState; }
-Video::Flags Video::GetFlags() { return videoFlags; }
-void Video::SwitchLooping() { videoFlags = videoFlags ^ Flags::Looping; }

@@ -32,7 +32,7 @@ void Video::continueVideo() {
     clock =
         (double)Sound->GetPlayedSampleCount() / audioEngine->GetSampleRate();
   } else {
-    clock += Manager::DeltaTime;
+    clock += Manager::DeltaTime; // Internal clock
   }
 
   // Load frame
