@@ -29,7 +29,7 @@ pkg_check_modules(SWSCALE REQUIRED libswscale)
 pkg_check_modules(SWRESAMPLE REQUIRED libswresample)
 
 add_library(ChargeVideo SHARED "src/ChargeVideo.hpp" "src/Manager.cpp"
-                               "src/Video.cpp")
+                               "src/Video.cpp" "src/VideoProcessing.cpp")
 
 target_link_libraries(
   ChargeVideo

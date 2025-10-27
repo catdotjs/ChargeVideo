@@ -91,8 +91,7 @@ public:
 private:
   // Contextes
   _ffmpeg::AVFormatContext *ctx;
-  const _ffmpeg::AVCodec *vCodec;
-  const _ffmpeg::AVCodec *aCodec;
+  const _ffmpeg::AVCodec *vCodec, *aCodec;
   _ffmpeg::AVCodecContext *vCodecCtx, *aCodecCtx;
   _ffmpeg::AVStream *videoStream, *audioStream;
   struct _ffmpeg::SwsContext *swsCtx = NULL; // Visual
@@ -117,22 +116,15 @@ private:
 
   // Audio
   ChargeAudio::Engine *audioEngine;
-
-  // Audio Channel data
   _ffmpeg::AVChannelLayout outLayout;
   _ffmpeg::AVSampleFormat sampleFormat = _ffmpeg::AV_SAMPLE_FMT_FLT;
 
-  // Image Buffering
+  // Image
   std::map<double, Image2D> frameBuffer;
-  uint32_t bufferMaxFrames = 0;
-
-  // SAR / Sizing
-  uint32_t scaleFactor = 1;
   Vector2i Dimensions{0, 0};
-
-  // Frame handling
+  uint32_t bufferMaxFrames = 0, scaleFactor = 1;
+  float bufferLenghtInSeconds = 0.0f;
   bool frameSet = false;
-  float bufferLenghtInSeconds;
 
   // Methods
   void continueVideo();
@@ -142,7 +134,7 @@ private:
   inline void frameConvert();
   inline void frameFlip(_ffmpeg::AVFrame *frame);
 
-  inline void restartVideo();
+  void restartVideo();
   void dumpAndRefillBuffer();
 
   void loadTexture(Containers::Array<char> data);
